@@ -1,14 +1,14 @@
 # Task 4: Deployment topologies and trade-offs
 
-**Name / ชื่อ:**
+**Name / ชื่อ:** ปฏิพล พันธุศิลป์
 
-**Student ID / รหัสนิสิต:**
+**Student ID / รหัสนิสิต:** 6772055221
 
 This is **individual work**: each student completes and submits their own copy, in their own fork.
 
 *งานนี้เป็น**งานเดี่ยว** นิสิตแต่ละคนทำและส่งงานของตัวเอง ใน fork ของตัวเอง*
 
-**Scenario (A, B or C) / Scenario ที่เลือก:**
+**Scenario (A, B or C) / Scenario ที่เลือก:** B
 
 Choose **one** scenario below. If the last digit of your student ID is odd, take A or B; if it is even, take B or C. Use your measurements from Tutorial 6 as evidence: cite run names from `results/runs.csv`. Answer in Thai or English.
 
@@ -58,9 +58,9 @@ The three most important quality requirements for your scenario, each with a num
 
 | # | Quality | Requirement |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
+| 1 | Accuracy | ถูก 80% |
+| 2 | Cost | ใช้ Large model น้อยกว่า 40% |
+| 3 | Availability | ระบบต้องทำงานได้แม้จะเชื่อมต่ออินเตอร์เน็ตได้เพียง 50% ของเวลาใน 1 วัน |
 
 ## 2. Design / การออกแบบ
 
@@ -68,16 +68,26 @@ Your topology, the patterns you add, and a container-level diagram (C4 level 2).
 
 *topology ที่เลือก pattern ที่เพิ่ม และ diagram ระดับ container (C4 level 2) เขียนด้วย Mermaid*
 
+- **Topology:** T4 Batch
+- **Patterns:** Cascade
+
 ```mermaid
 C4Container
     title Your design: container diagram
-    %% Replace the example below with your own people, containers and relationships.
-    %% See the CampusEats C4 diagram in README.md for the full syntax.
     Person(customer, "Customer", "Writes restaurant reviews")
+    Person(owner, "Restaurant owner", "Reads review labels")
     System_Boundary(campuseats, "CampusEats") {
-        Container(review, "Review service", "Python, FastAPI", "What it does")
+        Container(kiosk, "Canteen kiosk (tablet)", "", "Stores reviews locally when the network is down")
+        Container(gateway, "API gateway", "Python, FastAPI")
+        Container(review, "Review service", "Python, FastAPI", "Receives review batches and labels them asynchronously")
+        Container(inference, "Inference service", "Python, FastAPI, scikit-learn", "Cascade: small model first, large model when unsure")
     }
-    Rel(customer, review, "Posts reviews", "HTTP/JSON")
+    Rel(customer, kiosk, "Writes reviews")
+    Rel(kiosk, gateway, "Sends stored reviews as a batch when online", "HTTP/JSON")
+    Rel(owner, gateway, "Calls", "HTTP/JSON")
+    Rel(gateway, review, "Calls", "HTTP/JSON")
+    Rel(review, inference, "Labels each batch", "REST")
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
 ```
 
 ## 3. Evidence / หลักฐาน
@@ -88,8 +98,8 @@ Which runs support your choice? Show the numbers and, for scenario A, the capaci
 
 | Run | What it shows / แสดงอะไร |
 |---|---|
-| | |
-| | |
+| t2-0.6, t2-0.7, t2-0.8, t2-0.9, t3-cache | Cascade มี accuracy เกิน 80% ทุกอัน (91.5%–93.5%) |
+| t2-0.6 | Cost: large calls 38% ต่ำกว่า 40% |
 
 ## 4. ADR
 
@@ -97,20 +107,20 @@ Use the ADR format from W5.
 
 *ใช้รูปแบบ ADR จาก W5*
 
-**Title:**
+**Title:** เก็บ Review ใน local แล้วค่อยทำ async batch
 
 **Status:** Proposed
 
-**Context:**
+**Context:** Scenario B มีปัญหาตรงนี้สัญญาณเน็ตมาๆ หายๆ แต่สามารถรอดู label ตอนสิ้นวันได้
 
-**Decision:**
+**Decision:** Batch กับ Cascade 0.6
 
 **Consequences:**
-- Positive:
-- Negative:
+- Positive: Accuracy กับ Cost ผ่าน
+- Negative: ได้ label ช้า
 
 **Alternatives considered:** at least one topology you rejected, and why.
 
 *อย่างน้อยหนึ่ง topology ที่ไม่เลือก และเหตุผล*
 
->
+> ใช้ small บน tablet เองเลย แล้วค่อย push ตอนมีเน็ต แต่ว่ามันจะทำให้ accuracy ไม่ถึง 80% ถ้าเราใช้แต่ small เลย
